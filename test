@@ -1,0 +1,85 @@
+import cv2
+import argparse
+import numpy as np
+from models import *
+from PIL import Image
+import torch
+import torchvision.transforms as tfs
+import matplotlib.pyplot as plt
+from torchvision.utils import make_grid
+import metrics
+
+abs = os.getcwd() + '/'
+abs_data = '/'
+
+
+def tensorShow(tensors, titles=['haze']):
+    fig = plt.figure()
+    for tensor, tit, i in zip(tensors, titles, range(len(tensors))):
+        img = make_grid(tensor)
+        npimg = img.numpy()
+        ax = fig.add_subplot(221 + i)
+        ax.imshow(np.transpose(npimg, (1, 2, 0)))
+        ax.set_title(tit)
+        plt.axis('off')
+    plt.show()
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--task', type=str, default='its', help='its or ots')
+parser.add_argument('--test_imgs', type=str, default='test/hazy', help='Test imgs folder')
+parser.add_argument('--clear_imgs', type=str, default='test/clear/', help='Test imgs folder')
+parser.add_argument('--size', type=str, default=240, help='Test imgs folder')
+
+opt = parser.parse_args()
+dataset = opt.task
+gps = 3
+blocks = 20
+img_dir = abs_data + opt.test_imgs + '/'
+img_clear_dir = abs_data + opt.clear_imgs
+output_dir = abs + f'pred_Network_{dataset}/'
+print("pred_dir:", output_dir)
+if not os.path.exists(output_dir):
+    os.mkdir(output_dir)
+model_dir = abs + f'trained_models/new/{dataset}_train_Network_{gps}_{blocks}.pk'
+device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+ckp = torch.load(model_dir, map_location=device)
+net = Network(gps=gps, blocks=blocks, inc=3)
+# net = nn.DataParallel(net)
+net.load_state_dict(ckp['model'])
+net.eval()
+ssim_all = []
+psnr_all = []
+for im in os.listdir(img_dir):
+
+    print(f'\r {im}', end='', flush=True)
+    im_num = im.split('_')[0]
+    haze = Image.open(img_dir + im)
+    clear = Image.open(img_clear_dir + im_num + '.png')
+
+    haze = cv2.resize(np.array(haze), dsize=(opt.size, opt.size))
+    clear = cv2.resize(np.array(clear), dsize=(opt.size, opt.size))
+    haze = Image.fromarray(haze)
+    clear = Image.fromarray(clear)
+
+    haze1 = tfs.Compose([
+        tfs.ToTensor(),
+        tfs.Normalize(mean=[0.64, 0.6, 0.58], std=[0.14, 0.15, 0.152])
+    ])(haze)[None, ::]
+
+    haze_no = tfs.ToTensor()(haze)[None, ::]
+    clear_no = tfs.ToTensor()(clear)[None, ::]
+    with torch.no_grad():
+        pred, _ = net(haze1, clear_no)
+    ssim1 = metrics.ssim(pred, clear_no).item()
+    psnr1 = metrics.psnr(pred, clear_no)
+
+    ssim2 = metrics.ssim(haze_no, clear_no).item()
+    psnr2 = metrics.psnr(haze_no, clear_no)
+
+    ssim_all.append(ssim1)
+    psnr_all.append(psnr1)
+    ts = torch.squeeze(pred.clamp(0, 1).cpu())
+    print('ssim', ssim1, ssim2, 'psnr', psnr1, psnr2)
+
+print('\n', 'ssim', np.average(np.array(ssim_all)), 'psnr', np.average(np.array(psnr_all)))
