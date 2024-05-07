@@ -361,10 +361,10 @@ class generator(nn.Module):
             conv_block(nf, 3, 3, stride=1, padding=1, norm='none', activation='tanh')  # [3, 256, 256]
         )
 
-        self.conv1_1 = nn.Conv2d(6, 6, kernel_size=3, padding=1)
+        self.conv1_1 = nn.Conv2d(6, 6, kernel_size=1)
         self.conv1_2 = nn.Conv2d(6, 6, kernel_size=3, padding=1)
-        self.conv1_3 = nn.Conv2d(6, 6, kernel_size=3, padding=1)
-        self.conv1_4 = nn.Conv2d(6, 6, kernel_size=3, padding=1)
+        self.conv1_3 = nn.Conv2d(6, 6, kernel_size=5, padding=2)
+        self.conv1_4 = nn.Conv2d(6, 6, kernel_size=7, padding=3)
         self.conv2_1 = nn.Conv2d(24, 6, kernel_size=3, padding=1)
         self.conv2_2 = nn.Conv2d(6, 3, kernel_size=3, padding=1)
 
